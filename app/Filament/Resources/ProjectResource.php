@@ -146,7 +146,8 @@ class ProjectResource extends Resource
     public static function getRelations(): array
     {
         return [
-            RelationManagers\TranslationKeysRelationManager::class,
+            // We now handle translations through sub-navigation
+            // RelationManagers\TranslationKeysRelationManager::class,
         ];
     }
 
@@ -156,6 +157,46 @@ class ProjectResource extends Resource
             'index' => Pages\ListProjects::route('/'),
             'create' => Pages\CreateProject::route('/create'),
             'edit' => Pages\EditProject::route('/{record}/edit'),
+            'translation-keys' => Pages\TranslationKeys\ListTranslationKeys::route('/{record}/translation-keys'),
+            'translation-keys.create' => Pages\TranslationKeys\CreateTranslationKey::route('/{record}/translation-keys/create'),
+            'translation-keys.edit' => Pages\TranslationKeys\EditTranslationKey::route('/{record}/translation-keys/{translationKey}/edit'),
         ];
+    }
+
+    /**
+     * Get the resource's record sub-navigation
+     */
+    public static function getRecordSubNavigation(\Filament\Resources\Pages\Page $page): array
+    {
+        // Get the record ID from the route parameters
+        $recordId = request()->route('record');
+        
+        if (!$recordId) {
+            return [];
+        }
+        
+        // Manually create navigation items
+        return [
+            'edit' => \Filament\Navigation\NavigationItem::make()
+                ->label('Details')
+                ->icon('heroicon-o-pencil')
+                ->isActiveWhen(fn () => $page instanceof Pages\EditProject)
+                ->url(static::getUrl('edit', ['record' => $recordId])),
+            'translation-keys' => \Filament\Navigation\NavigationItem::make()
+                ->label('Translation Keys')
+                ->icon('heroicon-o-language')
+                ->isActiveWhen(fn () => $page instanceof Pages\TranslationKeys\ListTranslationKeys || 
+                                        $page instanceof Pages\TranslationKeys\CreateTranslationKey || 
+                                        $page instanceof Pages\TranslationKeys\EditTranslationKey)
+                ->url(static::getUrl('translation-keys', ['record' => $recordId])),
+        ];
+    }
+    
+    /**
+     * Register the sidebar navigation items for the resource.
+     */
+    public static function getNavigationItems(): array
+    {
+        return parent::getNavigationItems();
     }
 }
