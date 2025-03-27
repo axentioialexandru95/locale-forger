@@ -59,9 +59,13 @@ class ListTranslationKeys extends ListRecords
         return $record;
     }
     
-    protected function getProject(): Project
+    protected function getProject(): ?Project
     {
-        return Project::findOrFail($this->getParentId());
+        try {
+            return Project::find($this->getParentId());
+        } catch (\Exception $e) {
+            return null;
+        }
     }
     
     public function getSubNavigation(): array
@@ -71,13 +75,23 @@ class ListTranslationKeys extends ListRecords
     
     protected function getTableQuery(): Builder
     {
-        return TranslationKey::query()->where('project_id', $this->getProject()->id);
+        $project = $this->getProject();
+        $query = TranslationKey::query();
+        
+        if ($project) {
+            // Add the group_name alias for the group column to fix sorting issues
+            return $query->where('project_id', $project->id)
+                ->select('translation_keys.*')
+                ->selectRaw('"group" as group_name');
+        }
+        
+        return $query->whereRaw('1=0'); // Return empty result set if no project
     }
     
     public function table(Table $table): Table
     {
         return $table
-            ->defaultGroup('group')
+            ->defaultGroup('group') // Use the actual column name, not the alias
             ->defaultSort('key', 'asc')
             ->contentGrid([
                 'md' => 2,
@@ -111,9 +125,15 @@ class ListTranslationKeys extends ListRecords
             ->filters([
                 Tables\Filters\SelectFilter::make('group')
                     ->options(function () {
-                        return TranslationKey::where('project_id', $this->getProject()->id)
+                        $project = $this->getProject();
+                        if (!$project) {
+                            return [];
+                        }
+                        
+                        return TranslationKey::where('project_id', $project->id)
                             ->whereNotNull('group')
-                            ->pluck('group', 'group')
+                            ->selectRaw('"group" as group_name') // Use proper quoting for reserved keyword
+                            ->pluck('group_name', 'group_name')
                             ->unique()
                             ->toArray();
                     })
@@ -125,7 +145,11 @@ class ListTranslationKeys extends ListRecords
                         Forms\Components\Select::make('language_id')
                             ->label('Language')
                             ->options(function () {
-                                return $this->getProject()->languages->pluck('name', 'id');
+                                $project = $this->getProject();
+                                if (!$project || !isset($project->languages)) {
+                                    return [];
+                                }
+                                return $project->languages->pluck('name', 'id');
                             })
                             ->searchable()
                             ->preload(),
